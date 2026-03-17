@@ -90,3 +90,9 @@ Traceback (most recent call last):
     lid, site, title, price, url, auction_end, n24, n1 = row
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ValueError: too many values to unpack (expected 8)
+[watcher] Searching for: Holzfenster
+[watcher] 1 new listing(s) for 'Holzfenster'
+[watcher] Searching for: Büromöbel
+[watcher] No new listings for 'Büromöbel'
+[watcher] Searching for: Schreibtisch
+[watcher] 6 new listing(s) for 'Schreibtisch'

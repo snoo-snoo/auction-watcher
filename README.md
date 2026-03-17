@@ -163,11 +163,19 @@ If results come back empty, willhaben may have changed their data structure. The
 aurena is an **Angular SPA** backed by a proprietary GraphQL + REST API. The scraper:
 
 1. Authenticates via GraphQL mutation (`login`) with base64-encoded credentials
-2. Fetches all active auctions via REST package endpoint
-3. Filters by keyword across title, category, and description
-4. For individual lot URLs (`/posten/...`), fetches real-time lot data including current bid and images
+2. Fetches all active auctions, pre-filtered by category relevance to the keyword
+3. For each candidate auction, locates the first lot ID using a global ID range estimation:
+   - Aurena lot IDs are globally sequential across all auctions
+   - A known anchor (auction 17515 → lot 4302118) is used to estimate ID ranges
+   - First-lot IDs are cached in SQLite to avoid repeated probing
+4. Fetches all lots in batches of 96 and filters by keyword against title + description
+5. Returns individual `/posten/` URLs with current bid price + real total cost
 
-> **Note:** aurena organizes items as *auction events* (e.g. "Lagerauflösung Wien"), not individual listings like willhaben. Keyword matches are at the auction level. For lot-level search, use the `track` command with a direct lot URL.
+**Pricing:** `(current bid + 18% Provision) × 1.20 MwSt` — the real amount you pay.
+
+**Blacklist:** Deleted listings are permanently blocked and never re-added on future crawls.
+
+**Lot refresh:** On every `watch` run, current bid prices for tracked aurena lots are updated.
 
 ---
 
