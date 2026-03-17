@@ -63,8 +63,23 @@ def _parse_next_data(soup: BeautifulSoup) -> list[dict]:
             }
             title = ad.get("description") or attributes.get("HEADING", "")
             price_raw = attributes.get("PRICE_FOR_DISPLAY") or attributes.get("PRICE", "")
-            ad_id = ad.get("id", "")
-            url = f"https://www.willhaben.at/iad/{ad_id}" if ad_id else ""
+
+            # Prefer the SEO-friendly URL from contextLinkList
+            url = ""
+            ctx_links = ad.get("contextLinkList", {}).get("contextLink", [])
+            for link in ctx_links:
+                if link.get("id") == "seoSelfLink":
+                    rel = link.get("relativePath", "")
+                    # relativePath looks like /atverz/kaufen-und-verkaufen/d/title-12345/
+                    # strip leading /atverz if present
+                    if rel.startswith("/atverz"):
+                        rel = rel[len("/atverz"):]
+                    url = f"https://www.willhaben.at/iad{rel}"
+                    break
+            if not url:
+                ad_id = ad.get("id", "")
+                url = f"https://www.willhaben.at/iad/{ad_id}" if ad_id else ""
+
             if title and url:
                 results.append({
                     "title": title.strip(),
