@@ -43,24 +43,11 @@ def _time_remaining(ends_at_iso: str | None) -> str:
 
 
 def send_listing_alert(listing: dict, reason: str) -> bool:
-    site_label = listing.get("site", "").capitalize()
     title = listing.get("title", "–")
-    price = listing.get("price") or "Kein Preis"
     url = listing.get("url", "")
-    ends_at = listing.get("ends_at")
-    remaining = _time_remaining(ends_at)
-
-    lines = [
-        f"🔔 <b>{reason}</b>",
-        f"<b>{title}</b>",
-        f"💶 {price}",
-        f"🌐 {site_label}",
-    ]
-    if ends_at:
-        lines.append(f"⏰ Endet in: {remaining}")
-    lines.append(f"🔗 <a href=\"{url}\">Zum Inserat</a>")
-
-    return send_message("\n".join(lines))
+    price = listing.get("price") or "–"
+    msg = f"{reason}\n<b>{title}</b> · {price}\n🔗 {url}"
+    return send_message(msg)
 
 
 def send_suggestions(keyword: str, listings: list[dict]) -> bool:
@@ -68,29 +55,22 @@ def send_suggestions(keyword: str, listings: list[dict]) -> bool:
         return True
 
     MAX_LEN = 4000
-    header = f"🔍 Neue Treffer für <b>{keyword}</b> ({len(listings)} Inserat(e)):\n"
+    header = f"🔍 <b>{keyword}</b> — {len(listings)} neue Inserate:\n"
 
-    # Build individual listing lines
     lines = []
-    for i, l in enumerate(listings, 1):
+    for l in listings:
         title = (l.get("title") or "–").replace("<", "&lt;").replace(">", "&gt;")
-        price = l.get("price") or "Kein Preis"
+        price = l.get("price") or "–"
         url = l.get("url", "")
-        ends_at = l.get("ends_at")
-        line = f"{i}. <b>{title}</b> – {price}"
-        if ends_at:
-            line += f" (endet in {_time_remaining(ends_at)})"
-        line += f"\n   🔗 <a href=\"{url}\">{url[:80]}</a>"
-        lines.append(line)
+        lines.append(f"• <a href=\"{url}\">{title}</a> · {price}")
 
-    # Send in chunks that fit within Telegram's 4096 char limit
     current = header
     part = 1
     for line in lines:
         candidate = current + "\n" + line
         if len(candidate) > MAX_LEN:
             send_message(current)
-            current = f"🔍 <b>{keyword}</b> (Fortsetzung {part}):\n" + line
+            current = f"🔍 <b>{keyword}</b> (Forts. {part}):\n" + line
             part += 1
         else:
             current = candidate
