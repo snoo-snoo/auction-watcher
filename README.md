@@ -1,15 +1,19 @@
 # 🔨 auction-watcher
 
-> Automatically monitors **willhaben.at** and **aurena.at** for items on your watchlist and sends Telegram alerts before auctions end.
+> Automatically monitors **willhaben.at** and **aurena.at** for items on your watchlist and sends Telegram alerts before auctions end. Includes a local web dashboard for managing everything.
 
 ---
 
 ## ✨ Features
 
 - 🔍 **Keyword search** across willhaben.at and aurena.at
+- 🔗 **Link tracking** — paste any listing URL to add it to your watchlist and instantly find similar offers for price comparison
+- 🖼️ **Thumbnails** — listing images in the web dashboard
+- 💶 **aurena pricing** — shows current highest bid + 18% Provision + 20% MwSt = real total price
 - 📬 **Telegram notifications** — new listings, 24h warning, 1h urgent alert
 - 💾 **SQLite watchlist** — persist keywords and tracked listings
 - 🔐 **Authenticated aurena API** — uses official GraphQL endpoint
+- 🌐 **Local web dashboard** — mobile-first dark UI, manage everything in the browser
 - ⚙️ **Cron-ready** — run every 30 minutes, fully unattended
 
 ---
@@ -20,21 +24,42 @@
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Review credentials
-nano config.py        # Telegram token + chat ID
-nano aurena_auth.py   # aurena login (if needed)
+# 2. Copy and fill in credentials
+cp .env.example .env
+nano .env
 ```
 
-`config.py` contains:
+`.env` keys:
 | Key | Description |
 |---|---|
 | `TELEGRAM_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather) |
 | `TELEGRAM_CHAT_ID` | Your personal chat ID |
+| `AURENA_EMAIL` | aurena.at account email |
+| `AURENA_PASSWORD` | aurena.at account password |
 | `DB_PATH` | SQLite database path (default: `watchlist.db`) |
 
 ---
 
-## 📖 Usage
+## 🌐 Web Dashboard
+
+Start the local dashboard:
+
+```bash
+python web.py
+```
+
+Then open **http://localhost:5000** in your browser (also accessible from your phone on the same network).
+
+**Dashboard features:**
+- 📋 All watchlist keywords with their listings and thumbnails
+- ➕ Add keywords or paste a listing URL directly (FAB button)
+- 🗑 Remove keywords or individual listings
+- 🔔 Toggle auction end alerts per listing
+- ↻ Trigger a manual search run from the browser
+
+---
+
+## 📖 CLI Usage
 
 ### Manage your watchlist
 
@@ -42,6 +67,7 @@ nano aurena_auth.py   # aurena login (if needed)
 python cli.py add "Büroschrank"       # Add a keyword
 python cli.py list                    # Show all keywords
 python cli.py remove "Büroschrank"    # Remove keyword + its listings
+python cli.py listings                # Show all tracked listings
 ```
 
 ### Search (one-shot, no saving)
@@ -50,11 +76,19 @@ python cli.py remove "Büroschrank"    # Remove keyword + its listings
 python cli.py search "Holzfenster"
 ```
 
+### Track a listing URL
+
+```bash
+python cli.py track "https://www.willhaben.at/iad/..."
+python cli.py track "https://www.aurena.at/posten/12345/..."
+```
+
+Fetches the listing, extracts keywords, searches for similar offers sorted by price, and adds the keyword to your watchlist. Use `--no-watch` to skip the watchlist addition.
+
 ### Run the watcher
 
 ```bash
 python cli.py watch      # Search all keywords, save new results, send Telegram messages
-python cli.py listings   # Show currently tracked listings
 ```
 
 ---
@@ -73,9 +107,21 @@ Run every 30 minutes via cron:
 
 | Trigger | Message |
 |---|---|
-| New listing found | Title, price, link |
+| New listing found | Title, price, thumbnail link |
 | Auction ends in < 24 h | ⚠️ Single alert |
 | Auction ends in < 1 h | 🚨 Urgent alert |
+
+---
+
+## 💶 aurena Pricing
+
+aurena lots are displayed with the **real total cost**:
+
+```
+(current bid + 18% Provision) × 1.20 MwSt
+```
+
+Example: current bid €20 → **~€28 total**
 
 ---
 
@@ -84,16 +130,21 @@ Run every 30 minutes via cron:
 ```
 auction-watcher/
 │
-├── cli.py                 CLI entry point (add / remove / search / watch / listings)
-├── watcher.py             Main orchestration logic
+├── web.py                 Local Flask web dashboard
+├── cli.py                 CLI entry point (add / remove / search / track / watch / listings)
+├── watcher.py             Main orchestration logic (for cron)
 │
 ├── scraper_willhaben.py   willhaben.at scraper (Next.js / __NEXT_DATA__ parsing)
 ├── scraper_aurena.py      aurena.at scraper (authenticated REST API)
 ├── aurena_auth.py         aurena GraphQL login + token caching
+├── link_watch.py          URL tracker: fetch listing, extract keywords, find similar
 │
-├── db.py                  SQLite helpers (watchlist + listings)
-├── telegram_bot.py        Telegram message sender
-├── config.py              Credentials + constants
+├── db.py                  SQLite helpers (watchlist + listings + images)
+├── telegram_bot.py        Telegram message sender (chunked for long lists)
+├── config.py              Credentials + constants (via .env)
+│
+├── templates/index.html   Web dashboard template
+├── .env.example           Environment variable template
 └── requirements.txt       Python dependencies
 ```
 
@@ -103,7 +154,7 @@ auction-watcher/
 
 ### willhaben.at
 
-willhaben is a **React/Next.js** app. The scraper parses the `__NEXT_DATA__` JSON blob embedded server-side — this contains pre-rendered search results including SEO-friendly URLs.
+willhaben is a **React/Next.js** app. The scraper parses the `__NEXT_DATA__` JSON blob embedded server-side — this contains pre-rendered search results including SEO-friendly URLs and thumbnail images.
 
 If results come back empty, willhaben may have changed their data structure. The fallback is switching to [Playwright](https://playwright.dev/) for full JS rendering (a comment in `scraper_willhaben.py` marks the integration point).
 
@@ -113,9 +164,10 @@ aurena is an **Angular SPA** backed by a proprietary GraphQL + REST API. The scr
 
 1. Authenticates via GraphQL mutation (`login`) with base64-encoded credentials
 2. Fetches all active auctions via REST package endpoint
-3. Filters by keyword across title, category, and description fields
+3. Filters by keyword across title, category, and description
+4. For individual lot URLs (`/posten/...`), fetches real-time lot data including current bid and images
 
-> **Note:** aurena organizes items as *auction events* (e.g. "Lagerauflösung Wien"), not individual listings like willhaben. Keyword matches are at the auction level.
+> **Note:** aurena organizes items as *auction events* (e.g. "Lagerauflösung Wien"), not individual listings like willhaben. Keyword matches are at the auction level. For lot-level search, use the `track` command with a direct lot URL.
 
 ---
 
@@ -125,6 +177,8 @@ aurena is an **Angular SPA** backed by a proprietary GraphQL + REST API. The scr
 requests
 beautifulsoup4
 lxml
+python-dotenv
+flask
 ```
 
 Install with:
