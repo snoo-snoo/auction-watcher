@@ -8,3 +8,85 @@
 [watcher] No new listings for 'Holzfenster'
 [watcher] Searching for: Büromöbel
 [watcher] 1 new listing(s) for 'Büromöbel'
+[aurena] No auctions matching 'Holzfenster' found among 202 listings.
+[watcher] Searching for: Holzfenster
+[watcher] 6 new listing(s) for 'Holzfenster'
+[watcher] Searching for: Büromöbel
+[watcher] No new listings for 'Büromöbel'
+Traceback (most recent call last):
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 212, in <module>
+    main()
+    ~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 208, in main
+    args.func(args)
+    ~~~~~~~~~^^^^^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 94, in cmd_watch
+    run_watcher()
+    ~~~~~~~~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/watcher.py", line 100, in run
+    lid, site, title, price, url, auction_end, n24, n1 = row
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 8)
+[aurena] No auctions matching 'Holzfenster' found among 200 listings.
+[watcher] Searching for: Holzfenster
+[watcher] 2 new listing(s) for 'Holzfenster'
+[watcher] Searching for: Büromöbel
+[watcher] 2 new listing(s) for 'Büromöbel'
+[watcher] Searching for: Schreibtisch
+[watcher] 33 new listing(s) for 'Schreibtisch'
+Traceback (most recent call last):
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 212, in <module>
+    main()
+    ~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 208, in main
+    args.func(args)
+    ~~~~~~~~~^^^^^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 94, in cmd_watch
+    run_watcher()
+    ~~~~~~~~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/watcher.py", line 100, in run
+    lid, site, title, price, url, auction_end, n24, n1 = row
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 8)
+[aurena] No auctions matching 'Holzfenster' found among 200 listings.
+[watcher] Searching for: Holzfenster
+[watcher] No new listings for 'Holzfenster'
+[watcher] Searching for: Büromöbel
+[watcher] No new listings for 'Büromöbel'
+[watcher] Searching for: Schreibtisch
+[watcher] 18 new listing(s) for 'Schreibtisch'
+Traceback (most recent call last):
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 212, in <module>
+    main()
+    ~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 208, in main
+    args.func(args)
+    ~~~~~~~~~^^^^^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 94, in cmd_watch
+    run_watcher()
+    ~~~~~~~~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/watcher.py", line 100, in run
+    lid, site, title, price, url, auction_end, n24, n1 = row
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 8)
+[aurena] No auctions matching 'Holzfenster' found among 200 listings.
+[watcher] Searching for: Holzfenster
+[watcher] 1 new listing(s) for 'Holzfenster'
+[watcher] Searching for: Büromöbel
+[watcher] 1 new listing(s) for 'Büromöbel'
+[watcher] Searching for: Schreibtisch
+[watcher] 22 new listing(s) for 'Schreibtisch'
+Traceback (most recent call last):
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 212, in <module>
+    main()
+    ~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 208, in main
+    args.func(args)
+    ~~~~~~~~~^^^^^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/cli.py", line 94, in cmd_watch
+    run_watcher()
+    ~~~~~~~~~~~^^
+  File "/home/schnurinai/.openclaw/workspace/scraper/watcher.py", line 100, in run
+    lid, site, title, price, url, auction_end, n24, n1 = row
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 8)

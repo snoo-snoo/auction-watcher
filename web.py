@@ -72,6 +72,9 @@ def delete_keyword(kw_id):
 @app.route("/listing/<int:listing_id>/delete", methods=["POST"])
 def delete_listing(listing_id):
     with db.get_conn() as conn:
+        row = conn.execute("SELECT url FROM found_listings WHERE id = ?", (listing_id,)).fetchone()
+        if row:
+            db.blacklist_url(row[0])
         conn.execute("DELETE FROM found_listings WHERE id = ?", (listing_id,))
         conn.commit()
     return redirect(url_for("index"))

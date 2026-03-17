@@ -44,6 +44,35 @@ def _hours_until(dt: datetime) -> float:
     return delta.total_seconds() / 3600
 
 
+def _refresh_aurena_lots():
+    """Re-fetch current bid prices for all tracked aurena lot URLs."""
+    import re
+    from link_watch import fetch_aurena_lot
+
+    with db.get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, url FROM found_listings WHERE site = 'aurena' AND url LIKE '%/posten/%'"
+        ).fetchall()
+
+    if not rows:
+        return
+
+    print(f"[watcher] Refreshing {len(rows)} aurena lot(s)...")
+    for lid, url in rows:
+        m = re.search(r"/posten/(\d+)", url)
+        if not m:
+            continue
+        lot_id = int(m.group(1))
+        lot = fetch_aurena_lot(lot_id, url)
+        if lot and lot.get("price"):
+            with db.get_conn() as conn:
+                conn.execute(
+                    "UPDATE found_listings SET price=?, auction_end=? WHERE id=?",
+                    (lot["price"], lot.get("ends_at"), lid),
+                )
+                conn.commit()
+
+
 def run():
     db.init_db()
     keywords = db.get_all_keywords()  # list of (id, keyword, added_at)
@@ -61,13 +90,13 @@ def run():
             results += search_willhaben(keyword)
         except Exception as e:
             print(f"[watcher] willhaben error: {e}", file=sys.stderr)
-        try:
-            results += search_aurena(keyword)
-        except Exception as e:
-            print(f"[watcher] aurena error: {e}", file=sys.stderr)
+        # aurena: only track individual lot URLs (added via 'track' command)
+        # Automatic keyword search on aurena is disabled — too coarse-grained (auction-level only)
 
         new_listings = []
         for item in results:
+            if db.is_blacklisted(item.get("url", "")):
+                continue
             location = item.get("location") or item.get("location_str")
             dist = calc_distance(location) if location else None
             is_new, n24, n1 = db.upsert_listing(
@@ -90,14 +119,16 @@ def run():
         else:
             print(f"[watcher] No new listings for '{keyword}'")
 
+    # --- Refresh aurena lot prices ---
+    _refresh_aurena_lots()
+
     # --- Auction reminder pass ---
     for kw_row in keywords:
         kw_id, keyword, _ = kw_row
         listings = db.get_listings_for_keyword(kw_id)
-        # columns: id, site, title, price, url, auction_end, notified_24h, notified_1h
 
         for row in listings:
-            lid, site, title, price, url, auction_end, n24, n1 = row
+            lid, site, title, price, url, auction_end, n24, n1, *_ = row
             ends_dt = _parse_iso(auction_end)
             if not ends_dt:
                 continue

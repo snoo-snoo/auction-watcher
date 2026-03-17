@@ -35,6 +35,12 @@ def init_db():
                 FOREIGN KEY (wishlist_id) REFERENCES wishlist_items(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS blacklist (
+                url TEXT PRIMARY KEY,
+                blocked_at TEXT NOT NULL
+            )
+        """)
         # Migrations for existing DBs
         for col, typedef in [("image_url", "TEXT"), ("location", "TEXT"), ("distance_km", "REAL")]:
             try:
@@ -106,6 +112,23 @@ def get_listings_for_keyword(wishlist_id):
                FROM found_listings WHERE wishlist_id = ?""",
             (wishlist_id,),
         ).fetchall()
+
+
+def blacklist_url(url: str):
+    """Add a URL to the blacklist so it's never re-added."""
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO blacklist (url, blocked_at) VALUES (?, datetime('now'))",
+            (url,),
+        )
+        conn.commit()
+
+
+def is_blacklisted(url: str) -> bool:
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT 1 FROM blacklist WHERE url = ?", (url,)
+        ).fetchone() is not None
 
 
 def set_notified(listing_id, flag_24h=None, flag_1h=None):
