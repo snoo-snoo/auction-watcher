@@ -65,18 +65,86 @@ def fetch_willhaben_listing(url: str) -> dict | None:
 
 # --- Aurena detail fetch ---
 
+def _aurena_get_token():
+    from aurena_auth import get_auth_token
+    return get_auth_token()
+
+
+def fetch_aurena_lot(lot_id: int, url: str) -> dict | None:
+    """Fetch a single lot (Posten) via the aurena package API."""
+    import requests as _requests
+    from aurena_auth import AURENA_API, get_api_headers
+
+    headers = get_api_headers()
+    try:
+        r = _requests.post(
+            f"{AURENA_API}/package/762574881",
+            json={"ids": [lot_id]},
+            headers=headers,
+            timeout=15,
+        )
+        r.raise_for_status()
+        items = r.json().get("items", [])
+        if not items:
+            return None
+        lot = items[0]
+        ld = lot.get("ld", {})
+        titles = ld.get("ti", {})
+        descs = ld.get("de", {})
+        title = titles.get("de_DE") or next(iter(titles.values()), "")
+        desc_html = descs.get("de_DE") or next(iter(descs.values()), "")
+        # Strip HTML tags from description
+        desc = re.sub(r"<[^>]+>", " ", desc_html).strip()
+
+        # Starting price
+        sp = lot.get("sp")
+        price = f"€ {sp}" if sp else None
+
+        # Ending time
+        et_ms = lot.get("et")
+        ends_at = None
+        if et_ms:
+            from datetime import datetime, timezone
+            ends_at = datetime.fromtimestamp(et_ms / 1000, tz=timezone.utc).isoformat()
+
+        # Category
+        cat_id = lot.get("cat")
+
+        return {
+            "site": "aurena",
+            "title": title,
+            "description": desc,
+            "price": price,
+            "url": url,
+            "ends_at": ends_at,
+            "lot_id": lot_id,
+            "auction_id": lot.get("aid"),
+            "category_id": cat_id,
+        }
+    except Exception as e:
+        print(f"[link_watch] Error fetching aurena lot: {e}", file=sys.stderr)
+        return None
+
+
 def fetch_aurena_listing(url: str) -> dict | None:
     """
-    Extract auction ID from aurena URL and fetch details via API.
-    URL pattern: https://www.aurena.at/auktionen/{id}/{slug}
+    Detect aurena URL type and fetch details:
+    - /posten/{id}/... → lot-level detail
+    - /auktionen/{id}/... → auction-level detail
     """
-    match = re.search(r"/auktionen/(\d+)", url)
-    if not match:
-        print(f"[link_watch] Could not extract aurena auction ID from URL", file=sys.stderr)
+    # Lot URL: /posten/{lotId}/...
+    lot_match = re.search(r"/posten/(\d+)", url)
+    if lot_match:
+        return fetch_aurena_lot(int(lot_match.group(1)), url)
+
+    # Auction URL: /auktionen/{auctionId}/...
+    auction_match = re.search(r"/auktionen/(\d+)", url)
+    if not auction_match:
+        print(f"[link_watch] Could not extract aurena ID from URL", file=sys.stderr)
         return None
 
     from aurena_auth import fetch_all_auctions
-    auction_id = int(match.group(1))
+    auction_id = int(auction_match.group(1))
     auctions = fetch_all_auctions()
     auction = next((a for a in auctions if a.get("auctionId") == auction_id), None)
 

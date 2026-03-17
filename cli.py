@@ -111,10 +111,14 @@ def cmd_track(args):
     similar = result["similar"]
 
     print(f"📌 Listing: {listing['title']}")
+    if listing.get("description"):
+        print(f"   Details:  {listing['description'][:150]}")
     if listing.get("price"):
         print(f"   Preis:    {listing['price']}")
     if listing.get("location"):
         print(f"   Ort:      {listing['location']}")
+    if listing.get("ends_at"):
+        print(f"   Endet:    {listing['ends_at'][:19].replace('T', ' ')} UTC")
     print(f"   URL:      {listing['url']}")
     print(f"\n🔑 Erkannte Keywords: {', '.join(keywords)}")
 
