@@ -18,6 +18,7 @@ import db
 from scraper_willhaben import search_willhaben
 from scraper_aurena import search_aurena
 from watcher import run as run_watcher
+from link_watch import watch_link
 
 
 def cmd_add(args):
@@ -93,6 +94,51 @@ def cmd_watch(args):
     run_watcher()
 
 
+def cmd_track(args):
+    """Fetch a listing by URL, add keyword to watchlist, show similar listings."""
+    url = args.url.strip()
+    print(f"Fetching listing from: {url}\n")
+
+    result = watch_link(url)
+
+    if "error" in result:
+        print(f"Error: {result['error']}", file=sys.stderr)
+        sys.exit(1)
+
+    listing = result["listing"]
+    keywords = result["keywords"]
+    search_term = result["search_term"]
+    similar = result["similar"]
+
+    print(f"📌 Listing: {listing['title']}")
+    if listing.get("price"):
+        print(f"   Preis:    {listing['price']}")
+    if listing.get("location"):
+        print(f"   Ort:      {listing['location']}")
+    print(f"   URL:      {listing['url']}")
+    print(f"\n🔑 Erkannte Keywords: {', '.join(keywords)}")
+
+    # Add to watchlist
+    if not args.no_watch:
+        row_id = db.add_keyword(search_term)
+        print(f"✅ '{search_term}' zur Watchlist hinzugefügt (id={row_id})")
+
+    # Show similar listings
+    if similar:
+        print(f"\n🔍 Ähnliche Angebote ({len(similar)} gefunden):\n")
+        for i, item in enumerate(similar[:15], 1):
+            price = item.get("price") or "–"
+            site = item.get("site", "")
+            title = item.get("title", "–")
+            url_s = item.get("url", "")
+            print(f"  {i:>2}. [{site}] {title}")
+            print(f"      {price}")
+            print(f"      {url_s}")
+            print()
+    else:
+        print("\nKeine ähnlichen Angebote gefunden.")
+
+
 def cmd_listings(args):
     keywords = {r[0]: r[1] for r in db.get_all_keywords()}
     if not keywords:
@@ -148,6 +194,11 @@ def main():
 
     p_listings = sub.add_parser("listings", help="Show all tracked listings")
     p_listings.set_defaults(func=cmd_listings)
+
+    p_track = sub.add_parser("track", help="Fetch a listing URL, add to watchlist, find similar")
+    p_track.add_argument("url", help="willhaben.at or aurena.at listing URL")
+    p_track.add_argument("--no-watch", action="store_true", help="Don't add to watchlist, just compare")
+    p_track.set_defaults(func=cmd_track)
 
     args = parser.parse_args()
     args.func(args)
