@@ -96,15 +96,15 @@ def fetch_aurena_lot(lot_id: int, url: str) -> dict | None:
         # Strip HTML tags from description
         desc = re.sub(r"<[^>]+>", " ", desc_html).strip()
 
-        # Starting price + aurena fees (18% Provision + 20% MwSt auf Provision)
-        # Total: startprice * 1.20 (MwSt) + startprice * 0.18 * 1.20 (Provision inkl. MwSt)
-        # = startprice * (1.20 + 0.216) = startprice * 1.416
-        # Simpler: (sp + sp*0.18) * 1.20
-        sp = lot.get("sp")
-        if sp:
-            provision = round(sp * 0.18, 2)
-            total = round((sp + provision) * 1.20, 2)
-            price = f"€ {sp} (Startpreis) → ca. € {total:.0f} inkl. 18% Provision + MwSt"
+        # Current price: highest bid (hib.val) or fallback to starting price (sp)
+        # + aurena fees: 18% Provision + 20% MwSt → multiply by 1.416
+        sp = lot.get("sp") or 0
+        hib = lot.get("hib") or {}
+        current = hib.get("val") or sp
+        if current:
+            total = round(current * 1.20 * 1.18, 2)
+            label = "Aktuelles Gebot" if hib.get("val") else "Startpreis"
+            price = f"€ {current} ({label}) → ca. € {total:.0f} inkl. 18% Provision + MwSt"
         else:
             price = None
 
