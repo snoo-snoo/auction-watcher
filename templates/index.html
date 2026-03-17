@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔨 auction-watcher</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3350;
+      --accent: #4f8ef7;
+      --accent2: #7c5cfc;
+      --green: #3ecf8e;
+      --orange: #f59e0b;
+      --red: #ef4444;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      padding-bottom: 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity .15s;
+    }
+    .btn:active { opacity: .7; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-green { background: var(--green); color: #0f1117; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+
+    /* ── Main ── */
+    main { max-width: 700px; margin: 0 auto; padding: 20px 16px; }
+
+    /* ── Toast / banner ── */
+    .banner {
+      background: var(--green);
+      color: #0f1117;
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    /* ── Add keyword / track URL ── */
+    .add-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .add-card h2 { font-size: 14px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .05em; }
+    .input-row { display: flex; gap: 8px; }
+    .input-row input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+    }
+    .input-row input:focus { border-color: var(--accent); }
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 12px; }
+    .tab {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── Keyword section ── */
+    .kw-section {
+      margin-bottom: 24px;
+    }
+    .kw-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .kw-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 17px;
+    }
+    .kw-count {
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    /* ── Listing card ── */
+    .listing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+    .listing-card:last-child { margin-bottom: 0; }
+
+    .listing-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .listing-title {
+      font-weight: 600;
+      font-size: 14px;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .listing-title a {
+      color: var(--text);
+      text-decoration: none;
+    }
+    .listing-title a:hover { color: var(--accent); }
+
+    .site-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .site-willhaben { background: #fff3e0; color: #e65100; }
+    .site-aurena { background: #e0f2fe; color: #0277bd; }
+
+    .listing-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .listing-price { color: var(--green); font-weight: 700; font-size: 14px; }
+    .listing-ends { color: var(--orange); }
+    .listing-ends.urgent { color: var(--red); font-weight: 700; }
+
+    .listing-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* ── Track result panel ── */
+    .track-result {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .track-result h3 { color: var(--accent); font-size: 15px; margin-bottom: 10px; }
+    .track-listing-info { margin-bottom: 14px; }
+    .track-listing-info p { font-size: 14px; margin-bottom: 4px; }
+    .track-listing-info .tli-label { color: var(--muted); font-size: 12px; }
+    .similar-list { list-style: none; }
+    .similar-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .similar-list li:last-child { border-bottom: none; }
+    .similar-link { color: var(--text); text-decoration: none; flex: 1; }
+    .similar-link:hover { color: var(--accent); }
+    .similar-price { color: var(--green); font-weight: 700; white-space: nowrap; font-size: 13px; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 32px 16px;
+      font-size: 14px;
+    }
+    .empty .emoji { font-size: 36px; display: block; margin-bottom: 8px; }
+
+    /* ── Divider ── */
+    hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--accent2);
+      color: #fff;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      cursor: pointer;
+      border: none;
+      z-index: 200;
+    }
+
+    /* ── Modal ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 300;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px 36px;
+      width: 100%;
+      max-width: 700px;
+    }
+    .modal h2 { margin-bottom: 16px; font-size: 17px; }
+    .modal-tab-content { display: none; }
+    .modal-tab-content.active { display: block; }
+
+    @media (min-width: 600px) {
+      .modal-backdrop { align-items: center; }
+      .modal { border-radius: 20px; max-height: 90vh; overflow-y: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔨 <span>auction</span>-watcher</h1>
+  <form method="POST" action="/watch">
+    <button type="submit" class="btn btn-ghost btn-sm">↻ Jetzt suchen</button>
+  </form>
+</header>
+
+<main>
+
+  {% if request.args.get('refreshing') %}
+  <div class="banner">🔄 Suche läuft im Hintergrund — Seite in ~30 Sek. neu laden.</div>
+  {% endif %}
+
+  <!-- Track result -->
+  {% if track_result %}
+    {% set tr = track_result %}
+    {% if tr.error is defined %}
+      <div class="banner" style="background:var(--red);color:#fff;">❌ {{ tr.error }}</div>
+    {% else %}
+      <div class="track-result">
+        <h3>📌 {{ tr.listing.title }}</h3>
+        <div class="track-listing-info">
+          {% if tr.listing.description %}<p><span class="tli-label">Details</span><br>{{ tr.listing.description }}</p>{% endif %}
+          {% if tr.listing.price %}<p class="listing-price">{{ tr.listing.price }}</p>{% endif %}
+          {% if tr.listing.location %}<p><span class="tli-label">📍 {{ tr.listing.location }}</span></p>{% endif %}
+          {% if tr.listing.ends_at %}<p class="listing-ends">⏰ Endet: {{ tr.listing.ends_at[:16].replace('T',' ') }} UTC</p>{% endif %}
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">🔑 Keywords: {{ tr.keywords|join(', ') }} · <b style="color:var(--green)">✅ „{{ tr.search_term }}" zur Watchlist hinzugefügt</b></p>
+        {% if tr.similar %}
+        <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">🔍 Ähnliche Angebote ({{ tr.similar|length }}):</p>
+        <ul class="similar-list">
+          {% for item in tr.similar[:12] %}
+          <li>
+            <a href="{{ item.url }}" target="_blank" class="similar-link">
+              <span class="site-badge site-{{ item.site }}">{{ item.site }}</span>
+              {{ item.title[:60] }}{% if item.title|length > 60 %}…{% endif %}
+            </a>
+            <span class="similar-price">{{ item.price or '–' }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <!-- Keyword sections -->
+  {% if sections %}
+    {% for sec in sections %}
+    <div class="kw-section">
+      <div class="kw-header">
+        <div class="kw-title">
+          🔍 {{ sec.keyword }}
+          <span class="kw-count">{{ sec.listings|length }}</span>
+        </div>
+        <form method="POST" action="/keyword/{{ sec.id }}/delete" onsubmit="return confirm('Keyword «{{ sec.keyword }}» und alle Inserate löschen?')">
+          <button class="btn btn-danger btn-sm" type="submit">🗑 Löschen</button>
+        </form>
+      </div>
+
+      {% if sec.listings %}
+        {% for l in sec.listings %}
+        <div class="listing-card">
+          <div class="listing-top">
+            <div class="listing-title">
+              <a href="{{ l.url }}" target="_blank">{{ l.title }}</a>
+            </div>
+            <span class="site-badge site-{{ l.site }}">{{ l.site }}</span>
+          </div>
+          <div class="listing-meta">
+            {% if l.price and l.price != '–' %}
+            <span class="listing-price">{{ l.price }}</span>
+            {% endif %}
+            {% if l.auction_end %}
+            <span class="listing-ends">⏰ {{ l.auction_end[:16].replace('T',' ') }}</span>
+            {% endif %}
+          </div>
+          <div class="listing-actions">
+            <a href="{{ l.url }}" target="_blank" class="btn btn-ghost btn-sm">🔗 Öffnen</a>
+            <form method="POST" action="/listing/{{ l.id }}/alert" style="display:inline">
+              {% if l.notified_24h %}
+                <input type="hidden" name="action" value="reset">
+                <button class="btn btn-ghost btn-sm" type="submit" title="Alerts wieder aktivieren">🔕 Stumm</button>
+              {% else %}
+                <input type="hidden" name="action" value="mute">
+                <button class="btn btn-ghost btn-sm" type="submit" title="Alerts stummschalten">🔔 Alert</button>
+              {% endif %}
+            </form>
+            <form method="POST" action="/listing/{{ l.id }}/delete" style="display:inline" onsubmit="return confirm('Inserat entfernen?')">
+              <button class="btn btn-danger btn-sm" type="submit">✕</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty">
+          <span class="emoji">🔎</span>
+          Noch keine Inserate gefunden. Klick auf „Jetzt suchen".
+        </div>
+      {% endif %}
+    </div>
+    {% if not loop.last %}<hr>{% endif %}
+    {% endfor %}
+  {% else %}
+    <div class="empty">
+      <span class="emoji">📋</span>
+      Watchlist ist leer. Füge unten ein Keyword oder einen Link hinzu.
+    </div>
+  {% endif %}
+
+</main>
+
+<!-- FAB -->
+<button class="fab" onclick="openModal()" title="Hinzufügen">＋</button>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modal" onclick="closeOnBackdrop(event)">
+  <div class="modal">
+    <h2>➕ Hinzufügen</h2>
+
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchTab('tab-kw', this)">🔑 Keyword</button>
+      <button class="tab" onclick="switchTab('tab-url', this)">🔗 Link tracken</button>
+    </div>
+
+    <div id="tab-kw" class="modal-tab-content active">
+      <form method="POST" action="/keyword/add">
+        <div class="input-row">
+          <input type="text" name="keyword" placeholder="z.B. Holzfenster, Bürostuhl …" autofocus>
+          <button type="submit" class="btn btn-primary">＋</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="tab-url" class="modal-tab-content">
+      <form method="POST" action="/track">
+        <div class="input-row">
+          <input type="url" name="url" placeholder="willhaben.at oder aurena.at URL …">
+          <button type="submit" class="btn btn-primary">▶</button>
+        </div>
+        <p style="margin-top:8px;font-size:12px;color:var(--muted);">Analysiert das Inserat, sucht ähnliche Angebote und fügt das Keyword zur Watchlist hinzu.</p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openModal() { document.getElementById('modal').classList.add('open'); }
+  function closeOnBackdrop(e) {
+    if (e.target === document.getElementById('modal'))
+      document.getElementById('modal').classList.remove('open');
+  }
+  function switchTab(id, el) {
+    document.querySelectorAll('.modal-tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+  }
+  // Auto-open modal if watchlist empty
+  {% if not sections %}
+  window.addEventListener('load', () => setTimeout(openModal, 400));
+  {% endif %}
+</script>
+
+</body>
+</html>
