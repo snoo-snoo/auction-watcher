@@ -66,21 +66,35 @@ def send_listing_alert(listing: dict, reason: str) -> bool:
 def send_suggestions(keyword: str, listings: list[dict]) -> bool:
     if not listings:
         return True
+
+    MAX_LEN = 4000
     header = f"🔍 Neue Treffer für <b>{keyword}</b> ({len(listings)} Inserat(e)):\n"
-    chunks = [header]
+
+    # Build individual listing lines
+    lines = []
     for i, l in enumerate(listings, 1):
-        title = l.get("title", "–")
+        title = (l.get("title") or "–").replace("<", "&lt;").replace(">", "&gt;")
         price = l.get("price") or "Kein Preis"
         url = l.get("url", "")
         ends_at = l.get("ends_at")
         line = f"{i}. <b>{title}</b> – {price}"
         if ends_at:
             line += f" (endet in {_time_remaining(ends_at)})"
-        line += f"\n   🔗 <a href=\"{url}\">{url[:60]}</a>"
-        chunks.append(line)
+        line += f"\n   🔗 <a href=\"{url}\">{url[:80]}</a>"
+        lines.append(line)
 
-    text = "\n".join(chunks)
-    # Telegram max message length is 4096 chars; truncate if needed
-    if len(text) > 4000:
-        text = text[:3990] + "\n… (mehr im Browser)"
-    return send_message(text)
+    # Send in chunks that fit within Telegram's 4096 char limit
+    current = header
+    part = 1
+    for line in lines:
+        candidate = current + "\n" + line
+        if len(candidate) > MAX_LEN:
+            send_message(current)
+            current = f"🔍 <b>{keyword}</b> (Fortsetzung {part}):\n" + line
+            part += 1
+        else:
+            current = candidate
+
+    if current:
+        send_message(current)
+    return True
