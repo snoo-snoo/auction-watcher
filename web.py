@@ -88,6 +88,41 @@ def toggle_alert(listing_id):
     return redirect(url_for("index"))
 
 
+@app.route("/api/watch", methods=["PUT"])
+def api_watch():
+    """
+    PUT /api/watch
+    Add a keyword or listing URL to the watchlist.
+
+    Body (JSON):
+      { "keyword": "Holzfenster" }
+      { "url": "https://www.willhaben.at/..." }
+      { "url": "...", "keyword": "override keyword" }
+
+    Returns JSON with result and (for URLs) similar listings.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    url = data.get("url", "").strip()
+    keyword = data.get("keyword", "").strip()
+
+    if url:
+        result = watch_link(url)
+        if "error" in result:
+            return jsonify({"ok": False, "error": result["error"]}), 400
+        return jsonify({
+            "ok": True,
+            "listing": result["listing"],
+            "keyword_added": result["search_term"],
+            "similar_count": len(result["similar"]),
+            "similar": result["similar"][:10],
+        })
+    elif keyword:
+        row_id = db.add_keyword(keyword)
+        return jsonify({"ok": True, "keyword": keyword, "id": row_id})
+    else:
+        return jsonify({"ok": False, "error": "Provide 'url' or 'keyword'"}), 400
+
+
 @app.route("/watch", methods=["POST"])
 def trigger_watch():
     """Run the watcher in background and redirect back."""
