@@ -1,176 +1,112 @@
 """
 Scraper for aurena.at (auction platform).
 
-Aurena is an Angular SPA - the homepage loads all upcoming auctions as Angular components.
-We fetch the homepage HTML, parse auction entries, and filter by keyword.
+Uses the authenticated REST API (via aurena_auth.py) to fetch all active
+auctions and filter by keyword across title, category, and description fields.
 
-Auction data structure in HTML:
-  <auctionentry> elements with:
-    - <p class=title innerhtml="..."> for title
-    - <div class=num innerhtml="DD"> and <div class=month innerhtml="MMM"> for date
-    - <div class=state-text innerhtml="location"> for location
-    - Links to /auktionen/{id}/{slug}
+NOTE: Aurena auctions are grouped by auction event (e.g. "Büroauflösung Wien"),
+not individual lots. The scraper matches against auction-level metadata.
+For lot-level search, a full Playwright/browser approach would be needed.
 """
 
 import sys
-import re
 from datetime import datetime, timezone
-from bs4 import BeautifulSoup
-import requests
-from config import HEADERS
+from aurena_auth import fetch_all_auctions
 
 BASE_URL = "https://www.aurena.at"
-AUCTIONS_URL = "https://www.aurena.at"  # homepage has all upcoming auctions
-
-# German month abbreviations → month numbers
-DE_MONTHS_SHORT = {
-    "jan": 1, "jän": 1, "feb": 2, "mär": 3, "mar": 3,
-    "apr": 4, "mai": 5, "jun": 6, "jul": 7, "aug": 8,
-    "sep": 9, "okt": 10, "nov": 11, "dez": 12,
-}
-
-# Full German month names
-DE_MONTHS_FULL = {
-    "januar": 1, "jänner": 1, "februar": 2, "märz": 3, "april": 4,
-    "mai": 5, "juni": 6, "juli": 7, "august": 8, "september": 9,
-    "oktober": 10, "november": 11, "dezember": 12,
-}
 
 
-def _parse_auction_date(day_str: str, month_str: str) -> str | None:
-    """
-    Parse day number and German month abbreviation into ISO date string.
-    e.g. day_str="27", month_str="Mär" -> "2026-03-27T00:00:00+00:00"
-    """
+def _parse_ending_date(time_info: dict) -> str | None:
+    """Parse endingDate (Unix ms timestamp) to ISO string."""
+    ending_ms = time_info.get("endingDate")
+    if not ending_ms:
+        return None
     try:
-        day = int(day_str.strip())
-        month_key = month_str.strip().lower()[:3]
-        month = DE_MONTHS_SHORT.get(month_key)
-        if not month:
-            return None
-        # Assume current or next year
-        now = datetime.now(timezone.utc)
-        year = now.year
-        # If month is in the past, assume next year
-        if month < now.month or (month == now.month and day < now.day):
-            year += 1
-        dt = datetime(year, month, day, tzinfo=timezone.utc)
+        dt = datetime.fromtimestamp(ending_ms / 1000, tz=timezone.utc)
         return dt.isoformat()
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OSError):
         return None
 
 
-def _fetch_all_auctions() -> list[dict]:
-    """
-    Fetch aurena.at homepage and parse all upcoming auction entries.
-    Returns list of dicts: {title, url, ends_at, location, site}
-    """
-    try:
-        resp = requests.get(AUCTIONS_URL, headers=HEADERS, timeout=20)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"[aurena] Request error: {e}", file=sys.stderr)
-        return []
+def _auction_to_result(auction: dict) -> dict:
+    """Convert raw auction API dict to scraper result format."""
+    lang_data = auction.get("langData", {})
+    titles = lang_data.get("titles", {})
+    short_descs = lang_data.get("shortDescriptions", {})
+    cat_descs = lang_data.get("categoryDescriptions", {})
 
-    soup = BeautifulSoup(resp.text, "lxml")
-    auctions = []
+    # Prefer German title
+    title = (
+        titles.get("de_DE")
+        or titles.get("de_AT")
+        or next(iter(titles.values()), "")
+    )
+    location = auction.get("location", {})
+    city = location.get("city", "")
+    state = location.get("state", "")
+    location_str = ", ".join(filter(None, [city, state])) or None
 
-    # Find all <auctionentry> elements
-    entries = soup.find_all("auctionentry")
-    if not entries:
-        # Fallback: find by class pattern
-        entries = soup.find_all(class_=re.compile(r"auction"))
+    auction_id = auction.get("auctionId", "")
+    url = f"{BASE_URL}/auktionen/{auction_id}" if auction_id else BASE_URL
 
-    for entry in entries:
-        # Title
-        title_el = entry.find("p", class_="title")
-        if not title_el:
-            # Try innerhtml attribute
-            title_el = entry.find(attrs={"innerhtml": True})
-        title = None
-        if title_el:
-            # Use innerhtml attribute if present (aurena uses it)
-            title = title_el.get("innerhtml") or title_el.get_text(strip=True)
+    time_info = auction.get("timeInfo", {})
+    ends_at = _parse_ending_date(time_info)
 
-        if not title:
-            continue
-
-        # Date: <div class=num innerhtml="DD"> and <div class=month innerhtml="MMM">
-        day_el = entry.find(class_="num")
-        month_el = entry.find(class_="month")
-        ends_at = None
-        if day_el and month_el:
-            day = day_el.get("innerhtml") or day_el.get_text(strip=True)
-            month = month_el.get("innerhtml") or month_el.get_text(strip=True)
-            ends_at = _parse_auction_date(day, month)
-
-        # Location
-        location_el = entry.find(class_="state-text")
-        location = None
-        if location_el:
-            location = location_el.get("innerhtml") or location_el.get_text(strip=True)
-
-        # URL: find link in parent or nearby
-        link_el = entry.find_parent("a") or entry.find("a", href=True)
-        url = None
-        if link_el and link_el.get("href"):
-            href = link_el["href"]
-            if not href.startswith("http"):
-                href = BASE_URL + href
-            url = href
-        else:
-            # Generate search URL as fallback
-            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
-            url = f"{BASE_URL}/auktionen"
-
-        auctions.append({
-            "title": title,
-            "url": url,
-            "ends_at": ends_at,
-            "location": location,
-            "site": "aurena",
-            "price": None,
-        })
-
-    return auctions
+    return {
+        "title": title,
+        "price": None,
+        "url": url,
+        "site": "aurena",
+        "ends_at": ends_at,
+        "location": location_str,
+        # keep extra fields for keyword matching (not shown in output)
+        "_cat": " ".join(cat_descs.values()),
+        "_short_desc": " ".join(short_descs.values()),
+    }
 
 
 def search_aurena(keyword: str) -> list[dict]:
     """
-    Search aurena.at for *keyword* by fetching all auctions and filtering by title.
+    Search aurena.at for *keyword* by fetching all auctions via API and
+    filtering by title, category, and short description.
     Returns list of dicts: {title, price, url, site, ends_at}.
     """
-    all_auctions = _fetch_all_auctions()
+    all_auctions = fetch_all_auctions()
 
     if not all_auctions:
-        print(f"[aurena] Could not fetch auctions listing.", file=sys.stderr)
+        print("[aurena] Could not fetch auctions.", file=sys.stderr)
         return []
 
-    # Filter by keyword (case-insensitive, partial match)
     keyword_lower = keyword.lower()
-    # Also check related terms
-    keywords = [keyword_lower]
 
-    # Add German synonyms for common items
+    # Build list of search terms (keyword + common synonyms)
+    terms = [keyword_lower]
     synonyms = {
-        "büroschrank": ["büromöbel", "schrank", "aktenschrank", "regal", "büro"],
-        "schreibtisch": ["büromöbel", "tisch", "büro"],
-        "stuhl": ["sessel", "bürostuhl", "sitzgelegenheit"],
-        "sofa": ["couch", "sitzgarnitur", "möbel"],
-        "kühlschrank": ["kühlgerät", "kühlung"],
+        "büroschrank": ["schrank", "aktenschrank", "büromöbel"],
+        "schreibtisch": ["tisch", "büromöbel"],
+        "stuhl": ["sessel", "bürostuhl"],
+        "sofa": ["couch", "sitzgarnitur"],
+        "kühlschrank": ["kühlgerät"],
+        "fenster": ["holzfenster", "kunststofffenster", "fensterrahmen"],
+        "holzfenster": ["fenster", "holzfenster"],
     }
     for key, syns in synonyms.items():
         if key in keyword_lower:
-            keywords.extend(syns)
+            terms.extend(syns)
 
     results = []
     for auction in all_auctions:
-        title_lower = auction["title"].lower()
-        location_lower = (auction.get("location") or "").lower()
-        combined = title_lower + " " + location_lower
+        result = _auction_to_result(auction)
+        combined = " ".join([
+            result["title"],
+            result.get("_cat", ""),
+            result.get("_short_desc", ""),
+            result.get("location") or "",
+        ]).lower()
 
-        if any(kw in combined for kw in keywords):
-            results.append(auction)
+        if any(term in combined for term in terms):
+            # Strip internal fields before returning
+            results.append({k: v for k, v in result.items() if not k.startswith("_")})
 
     if not results:
         print(
