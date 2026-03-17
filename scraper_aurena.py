@@ -25,6 +25,21 @@ BASE_URL = "https://www.aurena.at"
 LOT_FETCH_PKG = 762574881   # package ID for lot batch fetch (max 96 IDs)
 LOT_BATCH_SIZE = 96
 
+_UMLAUT_MAP = str.maketrans({'ä': 'a', 'ö': 'o', 'ü': 'u', 'Ä': 'A', 'Ö': 'O', 'Ü': 'U', 'ß': 'ss'})
+
+
+def _aurena_slug(title: str) -> str:
+    """Convert a lot title to aurena's URL slug format."""
+    result = []
+    for ch in title.translate(_UMLAUT_MAP):
+        if ch == ' ':
+            result.append('_0')
+        elif ch.isalnum() or ch == '-':
+            result.append(ch)
+        else:
+            result.append(f'_{ord(ch):X}')
+    return ''.join(result)
+
 # Anchor: known lot ID for a known auction (verified empirically)
 ANCHOR_AUCTION_ID = 17515
 ANCHOR_FIRST_LID  = 4302118
@@ -198,7 +213,7 @@ def _fetch_matching_lots(auction: dict, keyword: str, headers: dict, all_auction
 
             lot_imgs = lot.get("im", [])
             lot_image = lot_imgs[0] if lot_imgs and isinstance(lot_imgs[0], str) else None
-            slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")[:40]
+            slug = _aurena_slug(title)
 
             results.append({
                 "title": title,
