@@ -25,7 +25,8 @@ def cmd_search(query: str):
 
     for i, item in enumerate(results, 1):
         ae = f"  [ends: {item['auction_end'][:16]}]" if item.get("auction_end") else ""
-        print(f"  [{i:>2}] [{item['site']:>9}] {item['title'][:55]:<55} | {item.get('price','N/A'):>12}{ae}")
+        price_str = item.get('price') or 'N/A'
+        print(f"  [{i:>2}] [{item['site']:>9}] {item['title'][:55]:<55} | {price_str:>12}{ae}")
         print(f"        {item['url']}")
 
     print()

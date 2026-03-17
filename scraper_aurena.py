@@ -1,196 +1,181 @@
 """
 Scraper for aurena.at (auction platform).
 
-Parses search results and extracts auction end times when available.
-End times on aurena appear in various formats:
-  - "17. März 2026, 14:30 Uhr"
-  - ISO-like strings embedded in data attributes
-  - Relative strings ("endet in 2 Stunden") — handled as best-effort
+Aurena is an Angular SPA - the homepage loads all upcoming auctions as Angular components.
+We fetch the homepage HTML, parse auction entries, and filter by keyword.
+
+Auction data structure in HTML:
+  <auctionentry> elements with:
+    - <p class=title innerhtml="..."> for title
+    - <div class=num innerhtml="DD"> and <div class=month innerhtml="MMM"> for date
+    - <div class=state-text innerhtml="location"> for location
+    - Links to /auktionen/{id}/{slug}
 """
 
 import sys
 import re
-from datetime import datetime, timezone, timedelta
-from urllib.parse import quote_plus
-
-import requests
+from datetime import datetime, timezone
 from bs4 import BeautifulSoup
+import requests
 from config import HEADERS
 
-BASE_URL = "https://www.aurena.at/de/suche"
+BASE_URL = "https://www.aurena.at"
+AUCTIONS_URL = "https://www.aurena.at"  # homepage has all upcoming auctions
 
-# German month names → month numbers
-DE_MONTHS = {
+# German month abbreviations → month numbers
+DE_MONTHS_SHORT = {
+    "jan": 1, "jän": 1, "feb": 2, "mär": 3, "mar": 3,
+    "apr": 4, "mai": 5, "jun": 6, "jul": 7, "aug": 8,
+    "sep": 9, "okt": 10, "nov": 11, "dez": 12,
+}
+
+# Full German month names
+DE_MONTHS_FULL = {
     "januar": 1, "jänner": 1, "februar": 2, "märz": 3, "april": 4,
     "mai": 5, "juni": 6, "juli": 7, "august": 8, "september": 9,
     "oktober": 10, "november": 11, "dezember": 12,
 }
 
 
-def _parse_german_date(text: str) -> datetime | None:
+def _parse_auction_date(day_str: str, month_str: str) -> str | None:
     """
-    Parse German date strings like:
-      "17. März 2026, 14:30 Uhr"
-      "17.03.2026 14:30"
-    Returns UTC datetime or None.
+    Parse day number and German month abbreviation into ISO date string.
+    e.g. day_str="27", month_str="Mär" -> "2026-03-27T00:00:00+00:00"
     """
-    text = text.strip()
-
-    # Try ISO format first
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-        try:
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
-
-    # "17. März 2026, 14:30 Uhr" or "17. März 2026 14:30"
-    m = re.search(
-        r"(\d{1,2})\.\s*([A-Za-zÄäÖöÜüß]+)\s+(\d{4})[,\s]+(\d{1,2}):(\d{2})",
-        text, re.IGNORECASE
-    )
-    if m:
-        day, month_str, year, hour, minute = m.groups()
-        month = DE_MONTHS.get(month_str.lower())
-        if month:
-            try:
-                return datetime(int(year), month, int(day), int(hour), int(minute),
-                                tzinfo=timezone.utc)
-            except ValueError:
-                pass
-
-    # "17.03.2026 14:30"
-    m = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})", text)
-    if m:
-        day, month, year, hour, minute = m.groups()
-        try:
-            return datetime(int(year), int(month), int(day), int(hour), int(minute),
-                            tzinfo=timezone.utc)
-        except ValueError:
-            pass
-
-    return None
+    try:
+        day = int(day_str.strip())
+        month_key = month_str.strip().lower()[:3]
+        month = DE_MONTHS_SHORT.get(month_key)
+        if not month:
+            return None
+        # Assume current or next year
+        now = datetime.now(timezone.utc)
+        year = now.year
+        # If month is in the past, assume next year
+        if month < now.month or (month == now.month and day < now.day):
+            year += 1
+        dt = datetime(year, month, day, tzinfo=timezone.utc)
+        return dt.isoformat()
+    except (ValueError, TypeError):
+        return None
 
 
-def _parse_relative_date(text: str) -> datetime | None:
+def _fetch_all_auctions() -> list[dict]:
     """
-    Parse relative strings like "endet in 2 Stunden", "endet in 30 Minuten".
-    Returns an approximate UTC datetime.
+    Fetch aurena.at homepage and parse all upcoming auction entries.
+    Returns list of dicts: {title, url, ends_at, location, site}
     """
-    now = datetime.now(timezone.utc)
-    text_lower = text.lower()
+    try:
+        resp = requests.get(AUCTIONS_URL, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[aurena] Request error: {e}", file=sys.stderr)
+        return []
 
-    m = re.search(r"(\d+)\s*stunde", text_lower)
-    if m:
-        return now + timedelta(hours=int(m.group(1)))
+    soup = BeautifulSoup(resp.text, "lxml")
+    auctions = []
 
-    m = re.search(r"(\d+)\s*minute", text_lower)
-    if m:
-        return now + timedelta(minutes=int(m.group(1)))
+    # Find all <auctionentry> elements
+    entries = soup.find_all("auctionentry")
+    if not entries:
+        # Fallback: find by class pattern
+        entries = soup.find_all(class_=re.compile(r"auction"))
 
-    m = re.search(r"(\d+)\s*tag", text_lower)
-    if m:
-        return now + timedelta(days=int(m.group(1)))
+    for entry in entries:
+        # Title
+        title_el = entry.find("p", class_="title")
+        if not title_el:
+            # Try innerhtml attribute
+            title_el = entry.find(attrs={"innerhtml": True})
+        title = None
+        if title_el:
+            # Use innerhtml attribute if present (aurena uses it)
+            title = title_el.get("innerhtml") or title_el.get_text(strip=True)
 
-    return None
+        if not title:
+            continue
 
+        # Date: <div class=num innerhtml="DD"> and <div class=month innerhtml="MMM">
+        day_el = entry.find(class_="num")
+        month_el = entry.find(class_="month")
+        ends_at = None
+        if day_el and month_el:
+            day = day_el.get("innerhtml") or day_el.get_text(strip=True)
+            month = month_el.get("innerhtml") or month_el.get_text(strip=True)
+            ends_at = _parse_auction_date(day, month)
 
-def _extract_ends_at(card) -> str | None:
-    """
-    Try to find an auction end time inside a listing card element.
-    Returns ISO string or None.
-    """
-    # 1. data-ends-at / data-end-time / datetime attributes
-    for attr in ("data-ends-at", "data-end-time", "data-auction-end", "datetime"):
-        val = card.get(attr)
-        if val:
-            dt = _parse_german_date(val)
-            if dt:
-                return dt.isoformat()
+        # Location
+        location_el = entry.find(class_="state-text")
+        location = None
+        if location_el:
+            location = location_el.get("innerhtml") or location_el.get_text(strip=True)
 
-    # 2. Any child element with those attributes
-    for attr in ("data-ends-at", "data-end-time", "data-auction-end"):
-        el = card.find(attrs={attr: True})
-        if el:
-            dt = _parse_german_date(el[attr])
-            if dt:
-                return dt.isoformat()
+        # URL: find link in parent or nearby
+        link_el = entry.find_parent("a") or entry.find("a", href=True)
+        url = None
+        if link_el and link_el.get("href"):
+            href = link_el["href"]
+            if not href.startswith("http"):
+                href = BASE_URL + href
+            url = href
+        else:
+            # Generate search URL as fallback
+            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+            url = f"{BASE_URL}/auktionen"
 
-    # 3. Text containing "endet" / "Restzeit" / "Ende"
-    for el in card.find_all(string=re.compile(r"endet|restzeit|ende|uhr", re.IGNORECASE)):
-        parent_text = el.strip()
-        dt = _parse_german_date(parent_text) or _parse_relative_date(parent_text)
-        if dt:
-            return dt.isoformat()
+        auctions.append({
+            "title": title,
+            "url": url,
+            "ends_at": ends_at,
+            "location": location,
+            "site": "aurena",
+            "price": None,
+        })
 
-    return None
+    return auctions
 
 
 def search_aurena(keyword: str) -> list[dict]:
     """
-    Search aurena.at for *keyword*.
-    Returns a list of dicts: {title, price, url, site, ends_at}.
-    ends_at is an ISO UTC string when available, else None.
+    Search aurena.at for *keyword* by fetching all auctions and filtering by title.
+    Returns list of dicts: {title, price, url, site, ends_at}.
     """
-    url = f"{BASE_URL}?q={quote_plus(keyword)}"
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"[aurena] Network error for '{keyword}': {e}", file=sys.stderr)
+    all_auctions = _fetch_all_auctions()
+
+    if not all_auctions:
+        print(f"[aurena] Could not fetch auctions listing.", file=sys.stderr)
         return []
 
-    soup = BeautifulSoup(resp.text, "lxml")
+    # Filter by keyword (case-insensitive, partial match)
+    keyword_lower = keyword.lower()
+    # Also check related terms
+    keywords = [keyword_lower]
 
-    # aurena uses a card-based layout; try multiple selector strategies
-    cards = (
-        soup.select(".auction-item")
-        or soup.select(".lot-item")
-        or soup.select("[class*='auction']")
-        or soup.select("[class*='lot']")
-        or soup.select("article")
-        or soup.select(".card")
-    )
+    # Add German synonyms for common items
+    synonyms = {
+        "büroschrank": ["büromöbel", "schrank", "aktenschrank", "regal", "büro"],
+        "schreibtisch": ["büromöbel", "tisch", "büro"],
+        "stuhl": ["sessel", "bürostuhl", "sitzgelegenheit"],
+        "sofa": ["couch", "sitzgarnitur", "möbel"],
+        "kühlschrank": ["kühlgerät", "kühlung"],
+    }
+    for key, syns in synonyms.items():
+        if key in keyword_lower:
+            keywords.extend(syns)
 
     results = []
-    for card in cards:
-        # Title
-        title_el = (
-            card.select_one("h2")
-            or card.select_one("h3")
-            or card.select_one(".title")
-            or card.select_one("[class*='title']")
-        )
-        # Price / current bid
-        price_el = (
-            card.select_one(".price")
-            or card.select_one("[class*='price']")
-            or card.select_one("[class*='bid']")
-            or card.select_one("[class*='gebot']")
-        )
-        # Link
-        link_el = card.select_one("a[href]")
+    for auction in all_auctions:
+        title_lower = auction["title"].lower()
+        location_lower = (auction.get("location") or "").lower()
+        combined = title_lower + " " + location_lower
 
-        title = title_el.get_text(strip=True) if title_el else None
-        price = price_el.get_text(strip=True) if price_el else None
-        href = link_el["href"] if link_el else None
-        if href and not href.startswith("http"):
-            href = "https://www.aurena.at" + href
-
-        ends_at = _extract_ends_at(card)
-
-        if title and href:
-            results.append({
-                "title": title,
-                "price": price,
-                "url": href,
-                "site": "aurena",
-                "ends_at": ends_at,
-            })
+        if any(kw in combined for kw in keywords):
+            results.append(auction)
 
     if not results:
         print(
-            f"[aurena] No results parsed for '{keyword}'. "
-            "Selectors may need updating if the site layout changed.",
+            f"[aurena] No auctions matching '{keyword}' found among {len(all_auctions)} listings.",
             file=sys.stderr,
         )
+
     return results
