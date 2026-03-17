@@ -222,6 +222,7 @@
       margin-bottom: 10px;
     }
     .listing-price { color: var(--green); font-weight: 700; font-size: 14px; }
+    .listing-dist { color: var(--muted); }
     .listing-ends { color: var(--orange); }
     .listing-ends.urgent { color: var(--red); font-weight: 700; }
 
@@ -404,6 +405,11 @@
             <div class="listing-meta">
               {% if l.price and l.price != '–' %}
               <span class="listing-price">{{ l.price }}</span>
+              {% endif %}
+              {% if l.distance_km %}
+              <span class="listing-dist">📍 {{ l.distance_km|int }} km</span>
+              {% elif l.location %}
+              <span class="listing-dist">📍 {{ l.location }}</span>
               {% endif %}
               {% if l.auction_end %}
               <span class="listing-ends">⏰ {{ l.auction_end[:16].replace('T',' ') }}</span>

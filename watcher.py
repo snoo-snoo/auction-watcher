@@ -20,6 +20,7 @@ import db
 from scraper_willhaben import search_willhaben
 from scraper_aurena import search_aurena
 from telegram_bot import send_suggestions, send_listing_alert
+from distance import distance_km as calc_distance
 
 
 def _now_utc() -> datetime:
@@ -67,6 +68,8 @@ def run():
 
         new_listings = []
         for item in results:
+            location = item.get("location") or item.get("location_str")
+            dist = calc_distance(location) if location else None
             is_new, n24, n1 = db.upsert_listing(
                 wishlist_id=kw_id,
                 site=item.get("site", ""),
@@ -75,6 +78,8 @@ def run():
                 url=item.get("url", ""),
                 auction_end=item.get("ends_at"),
                 image_url=item.get("image_url"),
+                location=location,
+                distance_km=dist,
             )
             if is_new:
                 new_listings.append(item)

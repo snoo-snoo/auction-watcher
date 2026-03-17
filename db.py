@@ -26,6 +26,8 @@ def init_db():
                 url TEXT NOT NULL UNIQUE,
                 auction_end TEXT,
                 image_url TEXT,
+                location TEXT,
+                distance_km REAL,
                 first_seen TEXT NOT NULL,
                 last_seen TEXT NOT NULL,
                 notified_24h INTEGER DEFAULT 0,
@@ -33,12 +35,13 @@ def init_db():
                 FOREIGN KEY (wishlist_id) REFERENCES wishlist_items(id)
             )
         """)
-        # Migration: add image_url column to existing DBs
-        try:
-            conn.execute("ALTER TABLE found_listings ADD COLUMN image_url TEXT")
-            conn.commit()
-        except Exception:
-            pass  # column already exists
+        # Migrations for existing DBs
+        for col, typedef in [("image_url", "TEXT"), ("location", "TEXT"), ("distance_km", "REAL")]:
+            try:
+                conn.execute(f"ALTER TABLE found_listings ADD COLUMN {col} {typedef}")
+                conn.commit()
+            except Exception:
+                pass
         conn.commit()
 
 
@@ -66,7 +69,7 @@ def remove_keyword(item_id: int):
         conn.commit()
 
 
-def upsert_listing(wishlist_id, site, title, price, url, auction_end, image_url=None):
+def upsert_listing(wishlist_id, site, title, price, url, auction_end, image_url=None, location=None, distance_km=None):
     now = datetime.utcnow().isoformat()
     with get_conn() as conn:
         existing = conn.execute(
@@ -75,17 +78,22 @@ def upsert_listing(wishlist_id, site, title, price, url, auction_end, image_url=
         ).fetchone()
         if existing:
             conn.execute(
-                "UPDATE found_listings SET last_seen=?, price=?, auction_end=?, image_url=COALESCE(?, image_url) WHERE url=?",
-                (now, price, auction_end, image_url, url),
+                """UPDATE found_listings
+                   SET last_seen=?, price=?, auction_end=?,
+                       image_url=COALESCE(?, image_url),
+                       location=COALESCE(?, location),
+                       distance_km=COALESCE(?, distance_km)
+                   WHERE url=?""",
+                (now, price, auction_end, image_url, location, distance_km, url),
             )
             conn.commit()
             return False, existing[1], existing[2]
         else:
             conn.execute(
                 """INSERT INTO found_listings
-                   (wishlist_id, site, title, price, url, auction_end, image_url, first_seen, last_seen)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (wishlist_id, site, title, price, url, auction_end, image_url, now, now),
+                   (wishlist_id, site, title, price, url, auction_end, image_url, location, distance_km, first_seen, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (wishlist_id, site, title, price, url, auction_end, image_url, location, distance_km, now, now),
             )
             conn.commit()
             return True, 0, 0
@@ -94,7 +102,7 @@ def upsert_listing(wishlist_id, site, title, price, url, auction_end, image_url=
 def get_listings_for_keyword(wishlist_id):
     with get_conn() as conn:
         return conn.execute(
-            """SELECT id, site, title, price, url, auction_end, notified_24h, notified_1h, image_url
+            """SELECT id, site, title, price, url, auction_end, notified_24h, notified_1h, image_url, location, distance_km
                FROM found_listings WHERE wishlist_id = ?""",
             (wishlist_id,),
         ).fetchall()
