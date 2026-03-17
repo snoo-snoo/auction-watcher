@@ -1,68 +1,67 @@
-# auction-watcher
+# 🔨 auction-watcher
 
-Monitors **willhaben.at** and **aurena.at** for items on your watchlist and sends Telegram reminders before auctions end.
+> Automatically monitors **willhaben.at** and **aurena.at** for items on your watchlist and sends Telegram alerts before auctions end.
 
 ---
 
-## Setup
+## ✨ Features
+
+- 🔍 **Keyword search** across willhaben.at and aurena.at
+- 📬 **Telegram notifications** — new listings, 24h warning, 1h urgent alert
+- 💾 **SQLite watchlist** — persist keywords and tracked listings
+- 🔐 **Authenticated aurena API** — uses official GraphQL endpoint
+- ⚙️ **Cron-ready** — run every 30 minutes, fully unattended
+
+---
+
+## 🚀 Setup
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. (Optional) Review / adjust credentials
-nano config.py
+# 2. Review credentials
+nano config.py        # Telegram token + chat ID
+nano aurena_auth.py   # aurena login (if needed)
 ```
 
 `config.py` contains:
-- `TELEGRAM_TOKEN` — your bot token from @BotFather
-- `TELEGRAM_CHAT_ID` — your personal or group chat ID
-- `DB_PATH` — SQLite database file path (default: `watchlist.db`)
-
-The database is created automatically on first run.
+| Key | Description |
+|---|---|
+| `TELEGRAM_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_CHAT_ID` | Your personal chat ID |
+| `DB_PATH` | SQLite database path (default: `watchlist.db`) |
 
 ---
 
-## Usage
+## 📖 Usage
 
 ### Manage your watchlist
 
 ```bash
-# Add a keyword
-python cli.py add "Büroschrank"
-
-# Show all keywords
-python cli.py list
-
-# Remove a keyword (also removes its tracked listings)
-python cli.py remove "Büroschrank"
+python cli.py add "Büroschrank"       # Add a keyword
+python cli.py list                    # Show all keywords
+python cli.py remove "Büroschrank"    # Remove keyword + its listings
 ```
 
-### Search
+### Search (one-shot, no saving)
 
 ```bash
-# One-shot search — prints results to terminal, does NOT save or notify
-python cli.py search "Stehlampe"
+python cli.py search "Holzfenster"
 ```
 
 ### Run the watcher
 
 ```bash
-# Run once — searches all keywords, saves new listings, sends Telegram messages
-python cli.py watch
-```
-
-### Inspect tracked listings
-
-```bash
-python cli.py listings
+python cli.py watch      # Search all keywords, save new results, send Telegram messages
+python cli.py listings   # Show currently tracked listings
 ```
 
 ---
 
-## Automation with cron
+## ⏰ Automation
 
-Run the watcher every 30 minutes:
+Run every 30 minutes via cron:
 
 ```cron
 */30 * * * * cd /path/to/auction-watcher && python cli.py watch >> watcher.log 2>&1
@@ -70,54 +69,71 @@ Run the watcher every 30 minutes:
 
 ---
 
-## Telegram notifications
-
-The bot sends three types of messages:
+## 📲 Telegram Notifications
 
 | Trigger | Message |
 |---|---|
-| New listing found | Batch suggestion with title, price, link |
-| Auction ends in < 24 h | Single alert (sent once) |
-| Auction ends in < 1 h | Urgent alert (sent once) |
+| New listing found | Title, price, link |
+| Auction ends in < 24 h | ⚠️ Single alert |
+| Auction ends in < 1 h | 🚨 Urgent alert |
 
 ---
 
-## Notes on site scraping
+## 🏗️ Architecture
+
+```
+auction-watcher/
+│
+├── cli.py                 CLI entry point (add / remove / search / watch / listings)
+├── watcher.py             Main orchestration logic
+│
+├── scraper_willhaben.py   willhaben.at scraper (Next.js / __NEXT_DATA__ parsing)
+├── scraper_aurena.py      aurena.at scraper (authenticated REST API)
+├── aurena_auth.py         aurena GraphQL login + token caching
+│
+├── db.py                  SQLite helpers (watchlist + listings)
+├── telegram_bot.py        Telegram message sender
+├── config.py              Credentials + constants
+└── requirements.txt       Python dependencies
+```
+
+---
+
+## 🔧 Technical Notes
 
 ### willhaben.at
 
-willhaben is a React/Next.js app. Plain HTTP requests get the server-side
-rendered HTML, which includes a __NEXT_DATA__ JSON blob that the scraper
-tries to parse first.
+willhaben is a **React/Next.js** app. The scraper parses the `__NEXT_DATA__` JSON blob embedded server-side — this contains pre-rendered search results including SEO-friendly URLs.
 
-If results come back empty: willhaben may have changed its data structure.
-Consider switching to Playwright for full JS rendering:
-
-    pip install playwright && playwright install chromium
-
-Then replace the requests.get(...) call in scraper_willhaben.py with a
-Playwright page load — a comment in that file marks the exact location.
+If results come back empty, willhaben may have changed their data structure. The fallback is switching to [Playwright](https://playwright.dev/) for full JS rendering (a comment in `scraper_willhaben.py` marks the integration point).
 
 ### aurena.at
 
-aurena.at renders more of its content server-side. The scraper parses auction
-end times from:
-- data-ends-at / datetime HTML attributes
-- German date strings ("17. März 2026, 14:30 Uhr")
-- Relative strings ("endet in 2 Stunden")
+aurena is an **Angular SPA** backed by a proprietary GraphQL + REST API. The scraper:
+
+1. Authenticates via GraphQL mutation (`login`) with base64-encoded credentials
+2. Fetches all active auctions via REST package endpoint
+3. Filters by keyword across title, category, and description fields
+
+> **Note:** aurena organizes items as *auction events* (e.g. "Lagerauflösung Wien"), not individual listings like willhaben. Keyword matches are at the auction level.
 
 ---
 
-## Project structure
+## 📦 Dependencies
 
 ```
-config.py             — credentials and shared constants
-db.py                 — SQLite setup and CRUD helpers
-telegram_bot.py       — Telegram message sender
-scraper_willhaben.py  — willhaben.at search
-scraper_aurena.py     — aurena.at search
-watcher.py            — main orchestration logic
-cli.py                — command-line interface
-requirements.txt      — Python dependencies
-watchlist.db          — SQLite database (created on first run)
+requests
+beautifulsoup4
+lxml
 ```
+
+Install with:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 📄 License
+
+MIT — do whatever you want with it.
