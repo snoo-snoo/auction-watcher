@@ -80,6 +80,10 @@ def _parse_next_data(soup: BeautifulSoup) -> list[dict]:
                 ad_id = ad.get("id", "")
                 url = f"https://www.willhaben.at/iad/{ad_id}" if ad_id else ""
 
+            # Thumbnail image
+            images = ad.get("advertImageList", {}).get("advertImage", [])
+            image_url = images[0].get("thumbnailImageUrl") if images else None
+
             if title and url:
                 results.append({
                     "title": title.strip(),
@@ -87,6 +91,7 @@ def _parse_next_data(soup: BeautifulSoup) -> list[dict]:
                     "url": url,
                     "site": "willhaben",
                     "ends_at": None,
+                    "image_url": image_url,
                 })
         except Exception:
             continue

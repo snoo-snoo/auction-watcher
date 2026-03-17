@@ -74,6 +74,7 @@ def run():
                 price=item.get("price"),
                 url=item.get("url", ""),
                 auction_end=item.get("ends_at"),
+                image_url=item.get("image_url"),
             )
             if is_new:
                 new_listings.append(item)

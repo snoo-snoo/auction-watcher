@@ -146,11 +146,41 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 14px;
       margin-bottom: 8px;
-      position: relative;
+      overflow: hidden;
+      display: flex;
+      gap: 0;
     }
     .listing-card:last-child { margin-bottom: 0; }
+
+    .listing-thumb {
+      width: 90px;
+      min-width: 90px;
+      background: var(--surface2);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .listing-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .listing-thumb-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: var(--border);
+    }
+
+    .listing-body {
+      padding: 12px;
+      flex: 1;
+      min-width: 0;
+    }
 
     .listing-top {
       display: flex;
@@ -164,6 +194,7 @@
       font-size: 14px;
       line-height: 1.4;
       flex: 1;
+      min-width: 0;
     }
     .listing-title a {
       color: var(--text);
@@ -352,34 +383,47 @@
       {% if sec.listings %}
         {% for l in sec.listings %}
         <div class="listing-card">
-          <div class="listing-top">
-            <div class="listing-title">
-              <a href="{{ l.url }}" target="_blank">{{ l.title }}</a>
+          <div class="listing-thumb">
+            {% if l.image_url %}
+              <a href="{{ l.url }}" target="_blank">
+                <img src="{{ l.image_url }}" alt="{{ l.title }}" loading="lazy">
+              </a>
+            {% else %}
+              <div class="listing-thumb-placeholder">
+                {% if l.site == 'willhaben' %}🏷{% else %}🔨{% endif %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="listing-body">
+            <div class="listing-top">
+              <div class="listing-title">
+                <a href="{{ l.url }}" target="_blank">{{ l.title }}</a>
+              </div>
+              <span class="site-badge site-{{ l.site }}">{{ l.site }}</span>
             </div>
-            <span class="site-badge site-{{ l.site }}">{{ l.site }}</span>
-          </div>
-          <div class="listing-meta">
-            {% if l.price and l.price != '–' %}
-            <span class="listing-price">{{ l.price }}</span>
-            {% endif %}
-            {% if l.auction_end %}
-            <span class="listing-ends">⏰ {{ l.auction_end[:16].replace('T',' ') }}</span>
-            {% endif %}
-          </div>
-          <div class="listing-actions">
-            <a href="{{ l.url }}" target="_blank" class="btn btn-ghost btn-sm">🔗 Öffnen</a>
-            <form method="POST" action="/listing/{{ l.id }}/alert" style="display:inline">
-              {% if l.notified_24h %}
-                <input type="hidden" name="action" value="reset">
-                <button class="btn btn-ghost btn-sm" type="submit" title="Alerts wieder aktivieren">🔕 Stumm</button>
-              {% else %}
-                <input type="hidden" name="action" value="mute">
-                <button class="btn btn-ghost btn-sm" type="submit" title="Alerts stummschalten">🔔 Alert</button>
+            <div class="listing-meta">
+              {% if l.price and l.price != '–' %}
+              <span class="listing-price">{{ l.price }}</span>
               {% endif %}
-            </form>
-            <form method="POST" action="/listing/{{ l.id }}/delete" style="display:inline" onsubmit="return confirm('Inserat entfernen?')">
-              <button class="btn btn-danger btn-sm" type="submit">✕</button>
-            </form>
+              {% if l.auction_end %}
+              <span class="listing-ends">⏰ {{ l.auction_end[:16].replace('T',' ') }}</span>
+              {% endif %}
+            </div>
+            <div class="listing-actions">
+              <a href="{{ l.url }}" target="_blank" class="btn btn-ghost btn-sm">🔗 Öffnen</a>
+              <form method="POST" action="/listing/{{ l.id }}/alert" style="display:inline">
+                {% if l.notified_24h %}
+                  <input type="hidden" name="action" value="reset">
+                  <button class="btn btn-ghost btn-sm" type="submit" title="Alerts wieder aktivieren">🔕 Stumm</button>
+                {% else %}
+                  <input type="hidden" name="action" value="mute">
+                  <button class="btn btn-ghost btn-sm" type="submit" title="Alerts stummschalten">🔔 Alert</button>
+                {% endif %}
+              </form>
+              <form method="POST" action="/listing/{{ l.id }}/delete" style="display:inline" onsubmit="return confirm('Inserat entfernen?')">
+                <button class="btn btn-danger btn-sm" type="submit">✕</button>
+              </form>
+            </div>
           </div>
         </div>
         {% endfor %}

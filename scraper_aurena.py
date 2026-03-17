@@ -52,6 +52,10 @@ def _auction_to_result(auction: dict) -> dict:
     time_info = auction.get("timeInfo", {})
     ends_at = _parse_ending_date(time_info)
 
+    # First image from auction (list of URL strings)
+    images = auction.get("images", [])
+    image_url = images[0] if images and isinstance(images[0], str) else None
+
     return {
         "title": title,
         "price": None,
@@ -59,6 +63,7 @@ def _auction_to_result(auction: dict) -> dict:
         "site": "aurena",
         "ends_at": ends_at,
         "location": location_str,
+        "image_url": image_url,
         # keep extra fields for keyword matching (not shown in output)
         "_cat": " ".join(cat_descs.values()),
         "_short_desc": " ".join(short_descs.values()),

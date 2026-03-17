@@ -26,7 +26,7 @@ def _get_dashboard_data():
         rows = db.get_listings_for_keyword(kw_id)
         listings = []
         for row in rows:
-            lid, site, title, price, url, auction_end, n24, n1 = row
+            lid, site, title, price, url, auction_end, n24, n1, image_url = row
             listings.append({
                 "id": lid,
                 "site": site,
@@ -36,6 +36,7 @@ def _get_dashboard_data():
                 "auction_end": auction_end,
                 "notified_24h": bool(n24),
                 "notified_1h": bool(n1),
+                "image_url": image_url,
             })
         sections.append({
             "id": kw_id,
