@@ -1,6 +1,11 @@
-TELEGRAM_TOKEN = "8743035445:AAHRrbsH4U-npFy7zpkA4JhHkOg8AuoEuZs"
-TELEGRAM_CHAT_ID = "8701634493"
-DB_PATH = "watchlist.db"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+DB_PATH = os.getenv("DB_PATH", "watchlist.db")
 
 HEADERS = {
     "User-Agent": (

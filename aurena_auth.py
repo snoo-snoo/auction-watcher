@@ -6,15 +6,19 @@ Credentials are base64-encoded before sending (required by aurena API).
 """
 
 import base64
+import os
 import sys
 import uuid
 import time
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 AURENA_GQL = "https://webplatform-facade.cluster.prod.aurena.services/api/graphql"
 AURENA_API = "https://webplatform-facade.cluster.prod.aurena.services/api/v1"
-AURENA_EMAIL = "hi@ypr.at"
-AURENA_PASSWORD = "chBX@Du%9z,f4@!"
+AURENA_EMAIL = os.environ["AURENA_EMAIL"]
+AURENA_PASSWORD = os.environ["AURENA_PASSWORD"]
 
 _GQL_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:148.0) Gecko/20100101 Firefox/148.0",
