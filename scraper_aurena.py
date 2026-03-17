@@ -18,20 +18,9 @@ BASE_URL = "https://www.aurena.at"
 SEARCH_PKG = 2485524364
 PAGE_SIZE = 96
 
-_UMLAUT_MAP = str.maketrans({'ä': 'a', 'ö': 'o', 'ü': 'u', 'Ä': 'A', 'Ö': 'O', 'Ü': 'U', 'ß': 'ss'})
-
-
 def _aurena_slug(title: str) -> str:
-    """Convert a lot title to aurena's URL slug format."""
-    result = []
-    for ch in title.translate(_UMLAUT_MAP):
-        if ch == ' ':
-            result.append('_0')
-        elif ch.isalnum() or ch == '-':
-            result.append(ch)
-        else:
-            result.append(f'_{ord(ch):X}')
-    return ''.join(result)
+    """Build a simple readable slug — aurena ignores the string after the lot ID."""
+    return re.sub(r"[^a-zA-Z0-9]+", "_", title).strip("_")[:60]
 
 
 def _parse_ending_date(ms) -> str | None:
